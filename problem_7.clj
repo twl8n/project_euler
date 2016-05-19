@@ -8,50 +8,46 @@
 ;; By listing the first six prime numbers: 2, 3, 5, 7, 11, and 13, we can see that the 6th prime is 13.  What
 ;; is the 10001st prime number?
 
+;; 541 is the 100 th prime
+;; 104743 is the 10001 th prime
+
 ;; We know about 2 as the first prime, so initialize our list of found primes with 2
 
 (def foundp [2])
 (def wanted 100)
 
+;; Return possib if it is prime, else return nil
 (defn checkp [possib fpcheck]
   (do
-      (prn 'possib possib 'fpcheck fpcheck)
-      ;; Exclude 0, 1, and any prime we've already found
+      ;; Exclude 0, 1, and any prime we've already found Unlikely to get these, so if you want more speed, get
+      ;; rid of this test.
       (if (or 
            (= 0 possib)
            (= 1 possib)
            (some #(= possib %) foundp))
-          (do
-              ());; implicit return
-        (if (= 1
-               (loop [fpc (first fpcheck)
-                     tail (rest fpcheck)]
-                     ;; (def var (first fpcheck))
-                     ;; (def fpcheck (rest fpcheck))
-                     (prn 'checking fpc)
-                     (if (nil? fpc)
-                         1
-                       (do
-                           (if (and 
-                                (not= fpc possib)
-                                (= 0 (mod possib fpc)))
-                               0)
-                           (recur (first tail) (rest tail))))))
-        (do
-            ;; Add the prime we found to the global foundp list.
-            (def foundp (conj foundp possib))))
-    )))
-  
+          nil ; Not prime, return nil
+        (loop [fpc (first fpcheck)
+              fprest (rest fpcheck)]
+              (cond (nil? fpc) possib ; Return a found prime
+                    (and (not= fpc possib) (= 0 (mod possib fpc))) nil ; Not a prime, return nil
+                    true (recur (first fprest) (rest fprest))) ; Keep working
+              ))))
+
 (defn -main []
   (prn 'Looking 'for 'the wanted 'th 'prime)
   ;; We already have 2 as the first, so begin looping with 3
   (loop [checkme 3]
         (when (< (count foundp) wanted)
-          (checkp checkme foundp)
-          (if (= 0 (mod checkme 50))
+
+          ;; If we get back our checkme, it must be prime so add it to the foundp seq
+          (if (= checkme (checkp checkme foundp))
+              (def foundp (conj foundp checkme)))
+
+          ;; Print a status message every few checks
+          (if (= 0 (mod checkme 2000))
               (prn 'Working 'on checkme 'Found (count foundp) 'primes))
           (recur (+ checkme 1))))
-  (prn (nth foundp (- wanted 1)) 'is 'the wanted 'prime))
+  (prn (nth foundp (- wanted 1)) 'is 'the wanted 'th 'prime))
 
 
 
