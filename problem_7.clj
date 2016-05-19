@@ -13,41 +13,42 @@
 
 ;; We know about 2 as the first prime, so initialize our list of found primes with 2
 
-(def foundp [2])
-(def wanted 100)
+(def wanted 10001)
 
 ;; Return possib if it is prime, else return nil
 (defn checkp [possib fpcheck]
-  (do
-      ;; Exclude 0, 1, and any prime we've already found Unlikely to get these, so if you want more speed, get
-      ;; rid of this test.
-      (if (or 
-           (= 0 possib)
-           (= 1 possib)
-           (some #(= possib %) foundp))
-          nil ; Not prime, return nil
-        (loop [fpc (first fpcheck)
-              fprest (rest fpcheck)]
-              (cond (nil? fpc) possib ; Return a found prime
-                    (and (not= fpc possib) (= 0 (mod possib fpc))) nil ; Not a prime, return nil
-                    true (recur (first fprest) (rest fprest))) ; Keep working
-              ))))
+  (loop [fpc (first fpcheck)
+        fprest (rest fpcheck)]
+        (cond (nil? fpc) possib ; Return a found prime
+              (and (not= fpc possib) (= 0 (mod possib fpc))) nil ; Not a prime, return nil
+              true (recur (first fprest) (rest fprest))) ; Keep working
+        ))
 
 (defn -main []
   (prn 'Looking 'for 'the wanted 'th 'prime)
-  ;; We already have 2 as the first, so begin looping with 3
-  (loop [checkme 3]
-        (when (< (count foundp) wanted)
-
-          ;; If we get back our checkme, it must be prime so add it to the foundp seq
-          (if (= checkme (checkp checkme foundp))
-              (def foundp (conj foundp checkme)))
-
-          ;; Print a status message every few checks
-          (if (= 0 (mod checkme 2000))
-              (prn 'Working 'on checkme 'Found (count foundp) 'primes))
-          (recur (+ checkme 1))))
-  (prn (nth foundp (- wanted 1)) 'is 'the wanted 'th 'prime))
+  ;; We already have 2 as the first prime, so begin looping with 3
+  (let [final
+    (loop [checkme 3
+          foundp [2]]
+          (if (>= (count foundp) wanted)
+              (nth foundp (- wanted 1)) ;; Done, final prime is the returned value of the loop
+            (do
+                ;; Print a status message every few checks
+                (if (= 0 (mod checkme 2000))
+                    (prn 'Working 'on checkme 'Found (count foundp) 'primes))
+                (recur (+ checkme 1)
+                       ;; If we get back our checkme, it must be prime so conj it to the foundp seq which will
+                       ;; be used in the next recur through the loop, else use foundp is unchanged.
+                       (if (= checkme (checkp checkme foundp))
+                           (conj foundp checkme)
+                         foundp)
+                       )
+              )
+            )
+          )]
+           (prn final 'is 'the wanted 'th 'prime)
+           )
+  )
 
 
 
