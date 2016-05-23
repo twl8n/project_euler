@@ -10,6 +10,11 @@ rather that simply brute force checking all possible numbers less than the candi
 
 It would be a nifty idea to take the wanted nth prime as a command line arg.
 
+Problem 1 is so simple that the solution isn't exciting. So, I've imagined it as a slightly expanded problem,
+and that is a chance to use a map.
+
+
+
 
 
 
