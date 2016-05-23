@@ -32,7 +32,7 @@
           foundp [2]]
           (if (>= (count foundp) wanted)
               (nth foundp (- wanted 1)) ;; Done, final prime is the returned value of the loop
-            (do
+            (do ;; else check candidate checkme inside the recurs
                 ;; Print a status message every few checks
                 (if (= 0 (mod checkme 2000))
                     (prn 'Working 'on checkme 'Found (count foundp) 'primes))
