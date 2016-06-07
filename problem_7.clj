@@ -46,7 +46,7 @@
               )
             )
           )]
-           (prn final 'is 'the wanted 'th 'prime)
+           (str final 'is 'the wanted 'th 'prime)
            )
   )
 
