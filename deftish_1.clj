@@ -1,17 +1,25 @@
-(ns deftish_1)
+(ns deftish_1
+    (:require [clojure.string :as string]
+              [clojure.set :as set]))
 
-(require 'clojure.string) ;For (capitalize)
-(require 'clojure.set) ;For (join)
+;; todo:
+
+;; - create an aggregation function, adapting exising clojure, and figure out where aggregation values
+;;   go. (They go into all rows?)
+
+;; - add some tests
+
+;; The Def table is a set of maps. Each map has the same keys. Rows of the table are the maps, and columns are
+;; the keys. Note that every map has the same keys, which is critical since the keys are columns, or if you
+;; prefer, the keys symbolically refer to multi-valued variables.
 
 ;; run the demo in Leiningen:
 ;; cd project_euler
 ;; lein repl
 ;; (load-file "deftish_1.clj")
-;; (deftish_1/t4)
+;; (deftish_1/demo-deft)
 
-;; Output is a set of maps. Note every map has the same keys.
-
-;; user=> (deftish_1/t4)
+;; user=> (deftish_1/demo-deft)
 ;; #{{:make volkswagen, :model golf, :disp nil, :color white} {:make "Toyota", :model "corolla", :disp 1.8, :color white} {:make Mercedes-Benz, :model "220b", :disp nil, :color white}}
 
 
@@ -22,9 +30,9 @@
 (defn add-row [table add]
   (conj table (merge (empty-row table) add)))
 
-;; Force the key to be a keyword 
+;; Force the key to be a keyword, in case someone passes the wrong type. Or is that necessary? Test this.
 (defn add-column [table key value]
-  (reduce #(conj %1 (assoc %2 (keyword key) value)) #{} table))
+  (map #(assoc %1 (keyword key) value) table))
 
 ;; Not much point in a function for this. At best a macro.
 ;; (defn update-column [row key value]
@@ -38,47 +46,61 @@
                 (conj mymap row)))
               #{} table))
 
-(defn where [table constraint rowfun]
-  (reduce (fn [mymap row] 
-              (if (constraint row)
-                  (conj mymap (apply (partial assoc row) (rowfun row)))
-                (conj mymap row))) #{} table))
+;; Yes, a function called (demo-table) that returns a test table.
+(defn demo-table []
+  #{{:make "toyota" :model "corolla"}
+  {:make "volkswagen" :model "golf"}})
 
-;; How to use a variable for the second arg to assoc? Need to pass [map key val & kvs] so
-;; I need to make a variable containing kvs. See (source assoc).
+;; (map) wants to return a list, so we have to (set) that into a set.  Also shows how to send a var with a
+;; list of args to (assoc) via (apply (partial )) as opposed to passing hard coded arguments.
+(defn where
+  "Like a where clause run against each row of table, if the constraint is true do the rowfun on this row."
+  [table constraint rowfun]
+  (set (map #(if (constraint %)
+                 (apply (partial assoc %) (rowfun %))
+               %) table)))
 
+;; Deft pretty print the table into a list of strings.
 
-;; works
-(defn t5 []
-  (let [args [:model "220b" :make 'Mercedes-Benz]] (apply (partial assoc {:make 'mercedes}) args)))
+;; Convert each column rkey of the table into a formatted string, and return a list of the strings. This
+;; "prints" one row into a list. Use reduce since we want a string which is an aggregate of the row.
+(defn prow [mrow rkeys]
+  (reduce #(str (format "%12s" (%2 mrow)) %1) "" rkeys))
 
-;; works also
-(defn t6 []
-  (let [args #{:model "220b" :make 'Mercedes-Benz}] (apply (partial assoc {:make 'mercedes}) args)))
+;; Create a list where each item is a string for output. First item is the head line where column names are
+;; key names.  Print the results: (doseq [curr (dpp)] (print curr))
+(defn dpp []
+  (let [table (demo-table)
+       rkeys (vec (sort-by comp (keys (first table))))]
+       (do
+           (cons
+            (println-str (reduce #(str (format "%12s" (name %2)) %1) "" rkeys))
+            (map (fn [mrow] (println-str (prow mrow rkeys))) table)))))
 
-;; works also
-(defn t7 []
-  (let [row {:make 'mercedes} 
-       rf (fn [row] [:model "220b" :make 'Mercedes-Benz])] (apply (partial assoc row) (rf row) )))
+;; Create a generalized aggregate function so we can do things like sum, max, etc.
+;; Probably need a column arg where the result will be stored.
+;; Might be able to call add-column to store the result.
 
-(defn t8 []
-  (-> #{}
-      (add-row {:make "toyota" :model "corolla"})
-      (where (fn [row] (= "toyota" (get row :make)))
-             (fn [row] [:make "Toyota" :disp 1.8]))))
+;; Single purpose agg, saves count of sum of string length of :make in column :sum-make.
+(defn agg [table]
+  (add-column table 'sum-make (reduce #(+ %1 (count (str(:make %2)))) 0 table)))
+
 
 ;; This is Deftish clojure, using the thread first macro (->).
 ;; This demos the (where) function which takes two fn's as args.
 ;; Also less elegant function (merc-220) which works, but uses knowledge of deftish internals.
-(defn t4 []
+(defn demo-deft []
   (-> #{} (add-row {:make "toyota" :model "corolla"})
       (add-column 'disp 0)
       (add-row {:make "mercedes"})
-      (add-row {:make 'volkswagen :model 'golf})
+      (add-row {:make "volkswagen" :model "golf"})
       (add-column 'color 'white)
-      (where (fn [row] (= "toyota" (get row :make)))
+      (where (fn [row] (= "toyota" (:make row)))
              (fn [row] [:make "Toyota" :disp 1.8]))
-      (merc-220)))
+      (where (fn [row] (and (= "golf" (:model row)) (= "volkswagen" (:make row))))
+             (fn [row] [:disp 2.2]))
+      (merc-220)
+      (agg)))
 
 ;; Everything below is historical, or notes and will be removed soo.
   
@@ -96,11 +118,6 @@
          {:make 'volkswagen :model 'golf})
         'color 'white))))
 
-;; Yes, a function called (table) that returns a test table.
-(defn table []
-  #{{:make 'toyota :model 'corolla}
-  {:make 'volkswagen :model 'golf}})
-
 
 ;; Assume that the first row has all columns. This is normally a safe assumption.  A set of table keys is not
 ;; what was needed for add-row. Maybe it will be useful for something else.
@@ -113,25 +130,6 @@
 
 (defn t2 [table]
   (merge (empty-row table) {:make "mercedes"}))
-
-(defn model-value-as-list []
-  (let [result (conj ()
-                     {:make 'toyota :model 'corolla}
-                     {:make 'volkswagen :model 'golf}
-                     )]
-                      (reduce (fn [list row] 
-                                  (conj list (get row :make))) () result)))
-
-;; Works, returns new list of map with :make capitalized.
-(defn mod-col-map []
-  (let [result (conj ()
-                     {:make 'toyota :model 'corolla}
-                     {:make 'volkswagen :model 'golf}
-                     )]
-                      (reduce (fn [list row] 
-                                  (conj list (assoc row :make (clojure.string/capitalize (get row :make )))))
-                              () result)))
-
 
 ;; reduce will use 2 args, and if supplied with 1 arg it will eat the first 2 components of arg 1
 ;; Supply reduce with 2 args: set set
