@@ -4,8 +4,13 @@
 
 ;; todo:
 
-;; - create an aggregation function, adapting exising clojure, and figure out where aggregation values
+;; - + create an aggregation function, adapting exising clojure, and figure out where aggregation values
 ;;   go. (They go into all rows?)
+
+;; - (add-column) is single-value on and can't deal with multivalued columns. We need a multi-value
+;;   (add-column).
+
+;; Not working: (add-column 'maxlen-make (fn [arg %1] (prn %1)))
 
 ;; - add some tests
 
@@ -51,15 +56,6 @@
   #{{:make "toyota" :model "corolla"}
   {:make "volkswagen" :model "golf"}})
 
-;; (map) wants to return a list, so we have to (set) that into a set.  Also shows how to send a var with a
-;; list of args to (assoc) via (apply (partial )) as opposed to passing hard coded arguments.
-(defn where
-  "Like a where clause run against each row of table, if the constraint is true do the rowfun on this row."
-  [table constraint rowfun]
-  (set (map #(if (constraint %)
-                 (apply (partial assoc %) (rowfun %))
-               %) table)))
-
 ;; Deft pretty print the table into a list of strings.
 
 ;; Convert each column rkey of the table into a formatted string, and return a list of the strings. This
@@ -77,13 +73,79 @@
             (println-str (reduce #(str (format "%12s" (name %2)) %1) "" rkeys))
             (map (fn [mrow] (println-str (prow mrow rkeys))) table)))))
 
+;; Seems like add-column could be generalized to allow the value arg to be a function. The trick is to know
+;; when or if the value function uses one of the other args, like table. Does %1 do that?
+
+;; Called as:
+;; (agg-add-col 'maxlen-make agg)))
+(defn agg-add-col [table key func]
+  (add-column table key (func table)))
+
 ;; Create a generalized aggregate function so we can do things like sum, max, etc.
 ;; Probably need a column arg where the result will be stored.
 ;; Might be able to call add-column to store the result.
 
-;; Single purpose agg, saves count of sum of string length of :make in column :sum-make.
-(defn agg [table]
-  (add-column table 'sum-make (reduce #(+ %1 (count (str(:make %2)))) 0 table)))
+;; Aggregation: retains states between rows. Return max string length of values in column col
+;;
+;; This works fine for a single column. How about doing max len of several data columns each assigned to a
+;; resulting column?
+
+(defn agg-maxlen 
+  "Get the max length of data in column col. Return the scalar value."
+  [table col]
+  (let [key (keyword col)]
+       (reduce 
+        #(let [curr_len (count (str(key %2)))] 
+              (if (> curr_len %1) curr_len %1))  0 table)))
+
+;; (map) wants to return a list, so we have to (set) that into a set.  Also shows how to send a var with a
+;; list of args to (assoc) via (apply (partial )) as opposed to passing hard coded arguments.
+
+(defn where
+  "Like a where clause run against each row of table. If the constraint is true do the rowfun on this row."
+  [table constraint rowfun]
+  (set (map #(if (constraint %)
+                 (apply (partial assoc %) (rowfun %))
+               %) table)))
+
+;; Need to use map to get a different value for each row, but reduce to aggregate across rows. Agg functions
+;; like dcc and desc can have multi-valued results. dcc is special because it makes a sortable column in a
+;; single pass. The code below won't do anything like that, so it needs work.
+;; 
+;; Might need an initializer for zero
+;; (constraint) needs to return true-val false-val just like (if)
+;; or return true value and the else simply returns %1 which is result.
+
+;; This adds a column with an accumulator, essentially an aggregation operation using (reductions) which
+;; creates a lazy sequence.
+
+(defn with-accum1 [table]
+  (map #(assoc %1 :accum %2) table
+       (reductions str (map :model table))))
+
+;; Using an fn that always returns 1 we get a simple add-by-one.
+
+(defn with-accum2 [table]
+  (map #(assoc %1 :accum %2) table
+       (reductions + (map (fn [row] 1) table))))
+
+;; Leaving off the reductions, we simply get a single valued new column.
+
+(defn with-accum3 [table]
+  (map #(assoc %1 :accum %2) table
+       (map (fn [row] 1) table)))
+
+
+(defn agg-where [table constraint func]
+  (let [multival 
+    (reduce 
+     #(let [row %2
+           result %1]
+           (if (constraint row result)
+               (func row result)
+             result))  0 table)]
+             (where table (fn [row] (true))
+                    (fn [row] [:maxlen-model multival]))))
 
 
 ;; This is Deftish clojure, using the thread first macro (->).
@@ -100,7 +162,11 @@
       (where (fn [row] (and (= "golf" (:model row)) (= "volkswagen" (:make row))))
              (fn [row] [:disp 2.2]))
       (merc-220)
-      (agg)))
+      ((fn [table] (add-column table :maxlen-make (agg-maxlen table 'make))))))
+
+
+      ;; (agg-where (fn [row result] (> result (count (str (:model row)))))
+      ;;            (fn [row result] [:maxlen-model (count (str (:model row)))]))))
 
 ;; Everything below is historical, or notes and will be removed soo.
   
