@@ -4,6 +4,9 @@
 
 ;; todo:
 
+;; - + Now that we have a working col-max that takes a table and returns a map of column keys and max column
+;;     string length, add this to (dpp) in the (map) that creates the per-column format string.
+
 ;; - + create an aggregation function, adapting exising clojure, and figure out where aggregation values
 ;;   go. (They go into all rows?)
 
@@ -12,7 +15,15 @@
 
 ;; Not working: (add-column 'maxlen-make (fn [arg %1] (prn %1)))
 
+;; Working: 3 variants of with-accum that will set multi-value column with (reductions) or set a single value
+;; without the (reductions)
+
 ;; - add some tests
+
+;; - Improve (dpp) Add a list of cols to print, cols with max length of each col's values, use a function like
+;;   one of with-accum functions to dynamically cal the col widths.  Also, might be nice to calculate all col
+;;   widths in a single pass. That would be like a Deft aggration code block.
+
 
 ;; The Def table is a set of maps. Each map has the same keys. Rows of the table are the maps, and columns are
 ;; the keys. Note that every map has the same keys, which is critical since the keys are columns, or if you
@@ -56,6 +67,25 @@
   #{{:make "toyota" :model "corolla"}
   {:make "volkswagen" :model "golf"}})
 
+;; Need a map of col names and max value width for dpp.
+
+;; deftish_1=>  (map #(str (name %)) (keys (first (demo-table))))
+;; ("make" "model")
+
+;; deftish_1=>  (keys (first (demo-table)))
+;; (:make :model)
+
+;; deftish_1=> (reduce (fn foo [map key](merge map {key 0})) {} (keys (first (demo-table))))
+;; {:make 0, :model 0}
+
+;; deftish_1=> (reduce-kv (fn foo [map key val](merge map {key 0})) {} (first (demo-table)))
+;; {:make 0, :model 0}
+
+(defn col-max
+  "Return a single row map where the values are max col width for the corresponding key, that is: max string length."
+  [table]
+  (reduce-kv (fn [map key val](merge map {key (agg-maxlen table key)})) {} (first (table))))
+
 ;; Deft pretty print the table into a list of strings.
 
 ;; Convert each column rkey of the table into a formatted string, and return a list of the strings. This
@@ -64,14 +94,23 @@
   (reduce #(str (format "%12s" (%2 mrow)) %1) "" rkeys))
 
 ;; Create a list where each item is a string for output. First item is the head line where column names are
-;; key names.  Print the results: (doseq [curr (dpp)] (print curr))
-(defn dpp []
+;; key names.  Print the results: (doseq [curr (dpp (demo-deft))] (print curr))
+
+(defn dpp [table]
+  (let [rkeys (vec (sort-by comp (keys (first table))))]
+       (do
+           (cons
+            (println-str (reduce #(str (format "%12s" (name %2)) %1) "" rkeys))
+            (map (fn [mrow] (println-str (prow mrow rkeys))) table)))))
+
+(defn dpp2 []
   (let [table (demo-table)
        rkeys (vec (sort-by comp (keys (first table))))]
        (do
            (cons
             (println-str (reduce #(str (format "%12s" (name %2)) %1) "" rkeys))
             (map (fn [mrow] (println-str (prow mrow rkeys))) table)))))
+
 
 ;; Seems like add-column could be generalized to allow the value arg to be a function. The trick is to know
 ;; when or if the value function uses one of the other args, like table. Does %1 do that?
@@ -123,13 +162,14 @@
   (map #(assoc %1 :accum %2) table
        (reductions str (map :model table))))
 
-;; Using an fn that always returns 1 we get a simple add-by-one.
+;; Using a reductions fn that always returns 1 we get a simple add-by-one.
 
 (defn with-accum2 [table]
   (map #(assoc %1 :accum %2) table
        (reductions + (map (fn [row] 1) table))))
 
 ;; Leaving off the reductions, we simply get a single valued new column.
+;; This is an alternate implementation of add-column.
 
 (defn with-accum3 [table]
   (map #(assoc %1 :accum %2) table
