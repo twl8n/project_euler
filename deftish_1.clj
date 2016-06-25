@@ -81,35 +81,50 @@
 ;; deftish_1=> (reduce-kv (fn foo [map key val](merge map {key 0})) {} (first (demo-table)))
 ;; {:make 0, :model 0}
 
+;; Aggregation: retains states between rows. Return max string length of values in column col
+;;
+;; This works fine for a single column. How about doing max len of several data columns each assigned to a
+;; resulting column?
+
+(defn agg-maxlen 
+  "Get the max length of data in column col. Return the scalar value. Initialize with the column length of the
+key which might be longer than any of the data values."
+  [table col]
+  (let [key (keyword col)]
+       (reduce 
+        #(let [curr_len (count (str(key %2)))] 
+              (if (> curr_len %1) curr_len %1))  (count (name key)) table)))
+
+
 (defn col-max
-  "Return a single row map where the values are max col width for the corresponding key, that is: max string length."
+  "Return a single row map where keys are table's keys, the values are the corresponding max col width,
+  that is: max string length."
   [table]
-  (reduce-kv (fn [map key val](merge map {key (agg-maxlen table key)})) {} (first (table))))
+  (reduce-kv (fn foo [map key val](merge map {key (agg-maxlen table key)})) {} (first table)))
+
+;; Function to make format string %witdhs
+
+(defn fmts [width] (str "%" (+ 2 width) "s"))
 
 ;; Deft pretty print the table into a list of strings.
 
 ;; Convert each column rkey of the table into a formatted string, and return a list of the strings. This
 ;; "prints" one row into a list. Use reduce since we want a string which is an aggregate of the row.
-(defn prow [mrow rkeys]
-  (reduce #(str (format "%12s" (%2 mrow)) %1) "" rkeys))
 
-;; Create a list where each item is a string for output. First item is the head line where column names are
-;; key names.  Print the results: (doseq [curr (dpp (demo-deft))] (print curr))
+(defn prow [mrow rkeys width col-widths]
+  (reduce #(str (format (fmts (%2 col-widths)) (%2 mrow)) %1) "" rkeys))
 
-(defn dpp [table]
-  (let [rkeys (vec (sort-by comp (keys (first table))))]
+;; Print the results: (doseq [curr (dpp (demo-deft))] (print curr))
+
+(defn dpp
+  "deft pretty print. Create a list where each item is a string for output. First item is the header line using the keys as column names."
+  [table]
+  (let [rkeys (vec (sort-by comp (keys (first table))))
+       col-widths (col-max table)]
        (do
            (cons
-            (println-str (reduce #(str (format "%12s" (name %2)) %1) "" rkeys))
-            (map (fn [mrow] (println-str (prow mrow rkeys))) table)))))
-
-(defn dpp2 []
-  (let [table (demo-table)
-       rkeys (vec (sort-by comp (keys (first table))))]
-       (do
-           (cons
-            (println-str (reduce #(str (format "%12s" (name %2)) %1) "" rkeys))
-            (map (fn [mrow] (println-str (prow mrow rkeys))) table)))))
+            (println-str (reduce #(str (format (fmts (%2 col-widths)) (name %2)) %1) "" rkeys))
+            (map (fn [mrow] (println-str (prow mrow rkeys 14 col-widths))) table)))))
 
 
 ;; Seems like add-column could be generalized to allow the value arg to be a function. The trick is to know
@@ -124,18 +139,6 @@
 ;; Probably need a column arg where the result will be stored.
 ;; Might be able to call add-column to store the result.
 
-;; Aggregation: retains states between rows. Return max string length of values in column col
-;;
-;; This works fine for a single column. How about doing max len of several data columns each assigned to a
-;; resulting column?
-
-(defn agg-maxlen 
-  "Get the max length of data in column col. Return the scalar value."
-  [table col]
-  (let [key (keyword col)]
-       (reduce 
-        #(let [curr_len (count (str(key %2)))] 
-              (if (> curr_len %1) curr_len %1))  0 table)))
 
 ;; (map) wants to return a list, so we have to (set) that into a set.  Also shows how to send a var with a
 ;; list of args to (assoc) via (apply (partial )) as opposed to passing hard coded arguments.
