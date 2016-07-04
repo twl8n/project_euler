@@ -20,7 +20,7 @@
 ;; (problem_7/solution 10001)
 ;;=> {:wanted 10001, :prime 104743}
 
-;; Return tru if possib is prime, else false.
+;; Return true if possib is prime, else false.
 (defn checkp [possib fpcheck]
   (loop [fpc (first fpcheck)
         fprest (rest fpcheck)]
