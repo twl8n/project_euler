@@ -16,17 +16,19 @@
   (if (and 
        (not (.isDirectory filex)) 
        (not= (.getName filex) ".picasa.ini"))
-         (prn (dimensions (ImageIO/read (file dirname (.getName filex)))))))
+    (let [fname (.getName filex)
+          dims (dimensions (ImageIO/read (file dirname fname)))]
+      (vec (cons fname dims)))
+    nil))
 
 
 (defn -main
-  "I don't do a whole lot."
+  "List files and X Y dimensions in pixels."
   []
   (let [dirname "/Users/twl/ipad_photos/share"
         directory (clojure.java.io/file dirname)
         files (file-seq directory)]
-    ;; (map (fn [filex] (if (not (.isDirectory filex)) (prn (.getName filex)))) files)
-    (map #(fdim %) files)
+    (remove nil? (map #(fdim %) files))
     ))
 
   ;; (format/as-file
